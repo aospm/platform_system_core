@@ -573,10 +573,17 @@ bool ParseFstabFromString(const std::string& fstab_str, bool proc_mounts, Fstab*
         return false;
     }
 
-    /* If an A/B partition, modify block device to be the real block device */
-    if (!fs_mgr_update_for_slotselect(&fstab)) {
-        LERROR << "Error updating for slotselect";
-        return false;
+    /* If an A/B partition, and any non-suffixed device doesn't exist, fixup the fstab
+     * path by adding the slot suffix to all devices.
+     */
+    for (auto& fstab_entry : fstab) {
+        if (fstab_entry.fs_mgr_flags.slot_select
+            && access(fstab_entry.blk_device.c_str(), F_OK) != 0) {
+                LERROR << "Appending suffixes because '" << fstab_entry.blk_device
+                    << "' is slotselect and doesn't exist";
+                fs_mgr_update_for_slotselect(&fstab);
+                break;
+        }
     }
 
     *fstab_out = std::move(fstab);
